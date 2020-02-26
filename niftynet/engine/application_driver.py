@@ -362,5 +362,16 @@ class ApplicationDriver(object):
             iteration_message.ops_to_run,
             feed_dict=iteration_message.data_feed_dict)
 
+        ## Added by lchauvin 25/02/2020 ##
+        layer_name = application.net_param.output_layer_name
+        output_tensor = tf.squeeze(iteration_message.current_iter_output['niftynetout'][layer_name])
+        num_features = output_tensor.shape[-1]
+        with open("niftynet_output_layer_"+layer_name+".txt","a") as f:
+            for i in range(0,num_features):
+                max_output_tensor = tf.math.reduce_max(output_tensor[...,i]).eval()
+                f.write(str(max_output_tensor)+" ")
+            f.write("\n")
+        ##################################
+
         # broadcasting event of finishing an iteration
         ITER_FINISHED.send(application, iter_msg=iteration_message)

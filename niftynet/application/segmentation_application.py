@@ -454,8 +454,17 @@ class SegmentationApplication(BaseApplication):
             # classification probabilities or argmax classification labels
             data_dict = switch_sampler(for_training=False)
             image = tf.cast(data_dict['image'], tf.float32)
+
+            ## Added by lchauvin 25/02/2020 ##
+            output_layer_id = 0
+
             net_args = {'is_training': self.is_training,
+                        'layer_id': output_layer_id,
                         'keep_prob': self.net_param.keep_prob}
+            #net_args = {'is_training': self.is_training,
+            #            'keep_prob': self.net_param.keep_prob}
+            ##################################
+            
             net_out = self.net(image, **net_args)
 
             output_prob = self.segmentation_param.output_prob
@@ -471,6 +480,16 @@ class SegmentationApplication(BaseApplication):
                     'IDENTITY', num_classes=num_classes)
             net_out = post_process_layer(net_out)
 
+            ## Added by lchauvin 25/02/2020 ##
+            self.net_param.output_layer_id = output_layer_id
+            self.net_param.output_layer_name = self.net.layers[output_layer_id]['name']
+                        
+            outputs_collector.add_to_collection(
+                var=net_out, name=self.net_param.output_layer_name,
+                average_over_devices=False,
+                collection=NETWORK_OUTPUT)
+            ##################################
+            
             outputs_collector.add_to_collection(
                 var=net_out, name='window',
                 average_over_devices=False, collection=NETWORK_OUTPUT)
