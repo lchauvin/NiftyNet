@@ -16,6 +16,7 @@ from __future__ import print_function
 
 import os
 import time
+import numpy as np
 
 import tensorflow as tf
 
@@ -199,11 +200,18 @@ class ApplicationDriver(object):
                 # create a iteration message generator and
                 # iteratively run the graph (the main engine loop)
                 iteration_messages = self._generator(**vars(self))()
+                output_features = [];
                 ApplicationDriver.loop(
                     application=application,
+                    output_features=output_features,
                     iteration_messages=iteration_messages,
                     loop_status=loop_status)
 
+                layer_name = application.net_param.output_layer_name
+                with open("niftynet_output_layer_"+layer_name+".txt","a") as f:
+                    f.write(output_features)
+
+                
             except KeyboardInterrupt:
                 tf.logging.warning('User cancelled application')
             except (tf.errors.OutOfRangeError, EOFError):
@@ -230,6 +238,9 @@ class ApplicationDriver(object):
         tf.logging.info(
             "%s stopped (time in second %.2f).",
             type(application).__name__, (time.time() - start_time))
+
+
+        
 
     # pylint: disable=not-context-manager
     @staticmethod
@@ -299,6 +310,7 @@ class ApplicationDriver(object):
 
     @staticmethod
     def loop(application,
+             output_features,
              iteration_messages=(),
              loop_status=None):
         """
@@ -328,7 +340,24 @@ class ApplicationDriver(object):
             loop_status['current_iter'] = iter_msg.current_iter
 
             # run an iteration
-            ApplicationDriver.loop_step(application, iter_msg)
+            ApplicationDriver.loop_step(application, output_features, iter_msg)
+
+
+            ## Added by lchauvin 25/02/2020 ##
+            layer_name = application.net_param.output_layer_name
+            output_tensor = tf.squeeze(iter_msg.current_iter_output['niftynetout'][layer_name])
+            num_features = output_tensor.shape[-1]
+            #with open("niftynet_output_layer_"+layer_name+".txt","a") as f:
+            feat_vector = np.zeros((1,num_features), dtype=np.float32)
+            for i in range(0,num_features):
+                max_output_tensor = tf.math.reduce_max(output_tensor[...,i]).eval()
+                feat_vector[0,i]=max_output_tensor
+            output_features.append(feat_vector)
+            #    f.write(str(max_output_tensor)+" ")
+            #    f.write("\n")
+         ##################################
+
+
 
             # Checking stopping conditions
             if iter_msg.should_stop:
@@ -339,7 +368,7 @@ class ApplicationDriver(object):
         loop_status['normal_exit'] = True
 
     @staticmethod
-    def loop_step(application, iteration_message):
+    def loop_step(application, output_features, iteration_message):
         """
         Calling ``tf.session.run`` with parameters encapsulated in
         iteration message as an iteration.
@@ -349,6 +378,7 @@ class ApplicationDriver(object):
         :param iteration_message: an ``engine.IterationMessage`` instances
         :return:
         """
+
         # broadcasting event of starting an iteration
         ITER_STARTED.send(application, iter_msg=iteration_message)
 
@@ -363,15 +393,18 @@ class ApplicationDriver(object):
             feed_dict=iteration_message.data_feed_dict)
 
         ## Added by lchauvin 25/02/2020 ##
-        layer_name = application.net_param.output_layer_name
-        output_tensor = tf.squeeze(iteration_message.current_iter_output['niftynetout'][layer_name])
-        num_features = output_tensor.shape[-1]
-        with open("niftynet_output_layer_"+layer_name+".txt","a") as f:
-            for i in range(0,num_features):
-                max_output_tensor = tf.math.reduce_max(output_tensor[...,i]).eval()
-                f.write(str(max_output_tensor)+" ")
-            f.write("\n")
-        ##################################
-
+#        layer_name = application.net_param.output_layer_name
+#        output_tensor = tf.squeeze(iteration_message.current_iter_output['niftynetout'][layer_name])
+#        num_features = output_tensor.shape[-1]
+#        with open("niftynet_output_layer_"+layer_name+".txt","a") as f:
+#        feat_vector = np.zeros((1,num_features), dtype=np.float32);
+#        for i in range(0,num_features):
+#            max_output_tensor = tf.math.reduce_max(output_tensor[...,i]).eval()
+#            feat_vector[0,i]=max_output_tensor
+#        output_features.append(feat_vector)
+#                f.write(str(max_output_tensor)+" ")
+#            f.write("\n")
+#        ##################################
+        
         # broadcasting event of finishing an iteration
         ITER_FINISHED.send(application, iter_msg=iteration_message)
